@@ -81,7 +81,7 @@
         // 等待DOM完全加載
         document.addEventListener('DOMContentLoaded', function() {
             // 設定初始溫度和升溫率
-            const initialTemp = 25; // 初始溫度25°C
+            const initialTemp = 20; // 初始溫度25°C
             const rateA = 2;        // A物體升溫率：2°C/分鐘
             const rateB = 1;        // B物體升溫率：1°C/分鐘
             const duration = 30;    // 加熱總時間：30分鐘
@@ -236,7 +236,7 @@
                                 text: '時間 (分鐘)'
                             },
                             min: 0,
-                            max: 30,
+                            max: 40,
                             ticks: {
                                 stepSize: 3
                             }
@@ -246,7 +246,7 @@
                                 display: true,
                                 text: '溫度 (°C)'
                             },
-                            min: 20, // 起始值略低於25°C，便於觀察
+                            min: 0, // 起始值略低於25°C，便於觀察
                             ticks: {
                                 stepSize: 10
                             }
