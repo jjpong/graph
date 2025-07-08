@@ -1,0 +1,627 @@
+<!DOCTYPE html><html lang="zh-TW"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>歐姆定律互動式統計圖</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            background-color: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            text-align: center;
+            color: #333;
+            margin-bottom: 30px;
+        }
+        .main-content {
+            display: flex;
+            gap: 20px;
+            align-items: flex-start;
+        }
+        .chart-wrapper {
+            flex: 1;
+            position: relative;
+        }
+        .chart-container {
+            position: relative;
+            height: 600px;
+        }
+        .controls-panel {
+            width: 320px;
+            height: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .dataset-control {
+            flex: 1;
+            background-color: #f9f9f9;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+        }
+        .dataset-control.disabled {
+            opacity: 0.5;
+        }
+        .dataset-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+        .color-indicator {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+            margin-right: 10px;
+        }
+        .material-select {
+            margin-bottom: 10px;
+        }
+        .sliders-container {
+            display: flex;
+            gap: 10px;
+            flex: 1;
+            align-items: center;
+        }
+        .slider-group {
+            flex: 1;
+        }
+        label {
+            display: block;
+            margin-bottom: 4px;
+            color: #666;
+            font-size: 13px;
+        }
+        select {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        .range-value {
+            display: block;
+            text-align: center;
+            color: #888;
+            font-size: 12px;
+            margin-bottom: 8px;
+        }
+        input[type="checkbox"] {
+            margin-right: 5px;
+        }
+        .axis-selector {
+            position: absolute;
+            background: white;
+            border: 2px solid #2196F3;
+            border-radius: 6px;
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .axis-selector select {
+            margin: 0;
+            width: 150px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>歐姆定律互動式統計圖</h1>
+        
+        <div class="main-content">
+            <div class="chart-wrapper">
+                <div class="chart-container">
+                    <canvas id="myChart"></canvas>
+                </div>
+                <div class="axis-selector" id="axisSelector">
+                    <select id="axisSelect"></select>
+                </div>
+            </div>
+            
+            <div class="controls-panel" id="controlsPanel">
+                <!-- 數據組控制會動態插入這裡 -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 材料資料 - 使用更鮮明的顏色
+        const materials = {
+            '銅': { resistivity: 1.68e-8, color: '#FF6B35' }, // 橘紅色
+            '鐵': { resistivity: 9.71e-8, color: '#4ECDC4' }, // 青綠色
+            '鎳鉻絲': { resistivity: 1.10e-6, color: '#9B59B6' }, // 紫色
+            '康銅絲': { resistivity: 4.9e-7, color: '#E74C3C' }, // 紅色
+            '石墨': { resistivity: 1.0e-5, color: '#2ECC71' }, // 綠色
+            '矽': { resistivity: null, color: '#3498DB' }, // 藍色 - 使用特殊數據
+            '玻璃': { resistivity: 1.0e12, color: '#F39C12' } // 橙色
+        };
+
+        // 數據組
+        let datasets = [
+            { id: 1, material: '銅', length: 5, diameter: 5, enabled: true },
+            { id: 2, material: '鎳鉻絲', length: 5, diameter: 5, enabled: false },
+            { id: 3, material: '矽', length: 5, diameter: 5, enabled: false }
+        ];
+
+        let chart;
+        let currentXAxis = 'voltage';
+        let currentYAxis = 'current';
+        let currentAxisType = null;
+
+        // 檢查是否有矽在顯示中
+        function hasSiliconEnabled() {
+            return datasets.some(dataset => 
+                dataset.enabled && dataset.material === '矽'
+            );
+        }
+
+        // 計算電阻
+        function calculateResistance(material, length, diameter) {
+            if (material === '矽') {
+                return 'N/A';
+            }
+            const resistivity = materials[material].resistivity;
+            const lengthM = length;
+            const radiusM = diameter / 2000;
+            const area = Math.PI * radiusM * radiusM;
+            return resistivity * lengthM / area;
+        }
+
+        // 生成矽的數據點（使用真實的肖克利方程）
+        function generateSiliconData(dataset) {
+            const points = [];
+            
+            // 真實的二極體參數
+            const Is = 1e-12; // 飽和電流 (A)
+            const n = 1.5; // 理想因子（典型值 1-2）
+            const Vt = 0.026; // 熱電壓 at 25°C (kT/q)
+            const Rs = 0.05; // 串聯電阻 (Ω) - 小但非零
+            
+            // 根據尺寸調整參數
+            const lengthFactor = dataset.length / 5;
+            const areaFactor = (dataset.diameter / 5) ** 2;
+            const adjustedIs = Is * areaFactor;
+            const adjustedRs = Rs * lengthFactor / areaFactor;
+            
+            // 生成數據點
+            for (let i = 0; i <= 60; i++) {
+                const voltage = (1.2 * i) / 60;
+                let current = 0;
+                
+                if (voltage > 0) {
+                    // 使用簡化的計算方式，考慮串聯電阻
+                    // 對於小電壓，忽略串聯電阻影響
+                    if (voltage < 0.5) {
+                        current = adjustedIs * (Math.exp(voltage / (n * Vt)) - 1);
+                    } else {
+                        // 對於較大電壓，使用迭代找到準確值
+                        // 初始猜測
+                        let Vd = voltage - 0.1; // 假設串聯電阻上有0.1V壓降
+                        for (let j = 0; j < 5; j++) {
+                            current = adjustedIs * (Math.exp(Vd / (n * Vt)) - 1);
+                            Vd = voltage - current * adjustedRs;
+                            if (Vd < 0) {
+                                Vd = 0;
+                                break;
+                            }
+                        }
+                        current = adjustedIs * (Math.exp(Vd / (n * Vt)) - 1);
+                    }
+                    
+                    // 限制最大電流以避免數值溢出
+                    current = Math.min(current, 100);
+                }
+                
+                points.push({
+                    voltage: voltage,
+                    current: current,
+                    resistance: (voltage > 0 && current > 1e-15) ? voltage / current : 1e10
+                });
+            }
+            
+            return points;
+        }
+
+        // 生成數據點
+        function generateDataPoints(dataset) {
+            const hasSilicon = hasSiliconEnabled();
+            
+            // 對於矽，使用特殊的非線性模型
+            if (dataset.material === '矽') {
+                return generateSiliconData(dataset);
+            }
+            
+            // 其他材料使用線性計算
+            const resistance = calculateResistance(dataset.material, dataset.length, dataset.diameter);
+            const points = [];
+            
+            // 如果有矽顯示，限制電壓範圍在1.2V
+            let maxVoltage = hasSilicon ? 1.2 : 10;
+            
+            // 如果沒有矽，根據電阻大小調整電壓範圍
+            if (!hasSilicon) {
+                if (resistance > 1e3) maxVoltage = 100;
+                if (resistance > 1e6) maxVoltage = 1000;
+                if (resistance > 1e9) maxVoltage = 10000;
+            }
+            
+            // 生成數據點
+            const numPoints = 40;
+            for (let i = 0; i <= numPoints; i++) {
+                const voltage = (maxVoltage * i) / numPoints;
+                const current = voltage / resistance;
+                
+                points.push({
+                    voltage: voltage,
+                    current: current,
+                    resistance: resistance
+                });
+            }
+            
+            return points;
+        }
+
+        // 創建數據組控制界面
+        function createDatasetControls() {
+            const container = document.getElementById('controlsPanel');
+            container.innerHTML = '';
+            
+            datasets.forEach((dataset, index) => {
+                const div = document.createElement('div');
+                div.className = `dataset-control ${!dataset.enabled ? 'disabled' : ''}`;
+                
+                div.innerHTML = `
+                    <div class="dataset-header">
+                        <span class="color-indicator" style="background-color: ${materials[dataset.material].color}"></span>
+                        <label>
+                            <input type="checkbox" id="enable${dataset.id}" ${dataset.enabled ? 'checked' : ''}>
+                            數據組 ${dataset.id}
+                        </label>
+                    </div>
+                    
+                    <div class="material-select">
+                        <label>材質:</label>
+                        <select id="material${dataset.id}">
+                            ${Object.keys(materials).map(mat => 
+                                `<option value="${mat}" ${dataset.material === mat ? 'selected' : ''}>${mat}</option>`
+                            ).join('')}
+                        </select>
+                    </div>
+                    
+                    <div class="sliders-container">
+                        <div class="slider-group">
+                            <label>長度:</label>
+                            <input type="range" id="length${dataset.id}" min="1" max="10" step="0.5" value="${dataset.length}">
+                            <span class="range-value" id="lengthValue${dataset.id}">${dataset.length} m</span>
+                        </div>
+                        
+                        <div class="slider-group">
+                            <label>直徑:</label>
+                            <input type="range" id="diameter${dataset.id}" min="1" max="10" step="0.5" value="${dataset.diameter}">
+                            <span class="range-value" id="diameterValue${dataset.id}">${dataset.diameter} mm</span>
+                        </div>
+                    </div>
+                `;
+                
+                container.appendChild(div);
+                
+                // 綁定事件
+                document.getElementById(`enable${dataset.id}`).addEventListener('change', function(e) {
+                    div.classList.toggle('disabled', !e.target.checked);
+                    updateChart();
+                });
+                document.getElementById(`material${dataset.id}`).addEventListener('change', function() {
+                    updateColorIndicator(dataset.id);
+                    updateChart();
+                });
+                document.getElementById(`length${dataset.id}`).addEventListener('input', function(e) {
+                    document.getElementById(`lengthValue${dataset.id}`).textContent = e.target.value + ' m';
+                    updateChart();
+                });
+                document.getElementById(`diameter${dataset.id}`).addEventListener('input', function(e) {
+                    document.getElementById(`diameterValue${dataset.id}`).textContent = e.target.value + ' mm';
+                    updateChart();
+                });
+            });
+        }
+
+        // 更新顏色指示器
+        function updateColorIndicator(id) {
+            const material = document.getElementById(`material${id}`).value;
+            const colorIndicator = document.querySelector(`#controlsPanel .dataset-control:nth-child(${id}) .color-indicator`);
+            colorIndicator.style.backgroundColor = materials[material].color;
+        }
+
+        // 顯示軸選擇器
+        function showAxisSelector(e, axisType) {
+            const selector = document.getElementById('axisSelector');
+            const select = document.getElementById('axisSelect');
+            
+            currentAxisType = axisType;
+            const currentValue = axisType === 'x' ? currentXAxis : currentYAxis;
+            
+            select.innerHTML = `
+                <option value="voltage" ${currentValue === 'voltage' ? 'selected' : ''}>電壓 (V)</option>
+                <option value="current" ${currentValue === 'current' ? 'selected' : ''}>電流 (A)</option>
+                <option value="resistance" ${currentValue === 'resistance' ? 'selected' : ''}>電阻 (Ω)</option>
+            `;
+            
+            const rect = e.target.getBoundingClientRect();
+            selector.style.display = 'block';
+            selector.style.left = rect.left + 'px';
+            selector.style.top = (rect.bottom + 5) + 'px';
+        }
+
+        // 更新圖表
+        function updateChart() {
+            // 更新數據組資料
+            datasets.forEach(dataset => {
+                dataset.enabled = document.getElementById(`enable${dataset.id}`).checked;
+                dataset.material = document.getElementById(`material${dataset.id}`).value;
+                dataset.length = parseFloat(document.getElementById(`length${dataset.id}`).value);
+                dataset.diameter = parseFloat(document.getElementById(`diameter${dataset.id}`).value);
+            });
+            
+            // 準備圖表數據
+            const chartDatasets = [];
+            
+            datasets.forEach(dataset => {
+                if (dataset.enabled) {
+                    const points = generateDataPoints(dataset);
+                    
+                    if (points.length === 0) {
+                        return;
+                    }
+                    
+                    const data = points.map(p => ({
+                        x: p[currentXAxis],
+                        y: p[currentYAxis]
+                    }));
+                    
+                    const label = `${dataset.material} (L=${dataset.length}m, D=${dataset.diameter}mm)`;
+                    
+                    chartDatasets.push({
+                        label: label,
+                        data: data,
+                        borderColor: materials[dataset.material].color,
+                        backgroundColor: materials[dataset.material].color + '40',
+                        pointBackgroundColor: materials[dataset.material].color,
+                        pointBorderColor: materials[dataset.material].color,
+                        pointRadius: 2,
+                        pointHoverRadius: 4,
+                        borderWidth: 3,
+                        tension: dataset.material === '矽' ? 0.4 : 0,
+                        fill: false
+                    });
+                }
+            });
+            
+            // 更新圖表
+            chart.data.datasets = chartDatasets;
+            chart.options.scales.x.title.text = getAxisLabel(currentXAxis);
+            chart.options.scales.y.title.text = getAxisLabel(currentYAxis);
+            
+            // 始終使用線性刻度
+            chart.options.scales.x.type = 'linear';
+            chart.options.scales.y.type = 'linear';
+            
+            // 如果有矽顯示且X軸是電壓，設定最大值為1.2V
+            if (hasSiliconEnabled() && currentXAxis === 'voltage') {
+                chart.options.scales.x.max = 1.2;
+                chart.options.scales.x.min = 0;
+            } else {
+                delete chart.options.scales.x.max;
+                chart.options.scales.x.min = 0;
+            }
+            
+            chart.update();
+        }
+
+        // 獲取軸標籤
+        function getAxisLabel(axis) {
+            switch(axis) {
+                case 'voltage': return '電壓 (V)';
+                case 'current': return '電流 (A)';
+                case 'resistance': return '電阻 (Ω)';
+            }
+        }
+
+        // 初始化圖表
+        function initChart() {
+            const ctx = document.getElementById('myChart').getContext('2d');
+            
+            // 創建自定義插件來處理軸標籤點擊
+            const clickableScales = {
+                id: 'clickableScales',
+                afterEvent(chart, args) {
+                    const event = args.event;
+                    if (event.type !== 'click') return;
+                    
+                    const x = event.x;
+                    const y = event.y;
+                    const chartArea = chart.chartArea;
+                    
+                    // 檢查是否點擊了X軸標籤區域
+                    if (y > chartArea.bottom + 20 && y < chartArea.bottom + 50 && 
+                        x > chartArea.left && x < chartArea.right) {
+                        const fakeEvent = { target: { getBoundingClientRect: () => ({ left: x, bottom: y }) } };
+                        showAxisSelector(fakeEvent, 'x');
+                    }
+                    
+                    // 檢查是否點擊了Y軸標籤區域
+                    if (x > 10 && x < chartArea.left - 10 && 
+                        y > chartArea.top && y < chartArea.bottom) {
+                        const fakeEvent = { target: { getBoundingClientRect: () => ({ left: x, bottom: y }) } };
+                        showAxisSelector(fakeEvent, 'y');
+                    }
+                }
+            };
+            
+            chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    datasets: []
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    plugins: {
+                        title: {
+                            display: true,
+                            text: '歐姆定律關係圖',
+                            font: {
+                                size: 18
+                            }
+                        },
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                boxWidth: 20,
+                                padding: 10,
+                                font: {
+                                    size: 12
+                                },
+                                usePointStyle: false
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 10,
+                            cornerRadius: 4,
+                            displayColors: true,
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) {
+                                        label += ': ';
+                                    }
+                                    
+                                    const x = context.parsed.x;
+                                    const y = context.parsed.y;
+                                    
+                                    if (currentXAxis === 'voltage') {
+                                        label += `${x.toFixed(3)} V`;
+                                    } else if (currentXAxis === 'current') {
+                                        if (x < 0.001) {
+                                            label += `${(x * 1e6).toFixed(2)} μA`;
+                                        } else if (x < 1) {
+                                            label += `${(x * 1000).toFixed(2)} mA`;
+                                        } else {
+                                            label += `${x.toFixed(3)} A`;
+                                        }
+                                    } else {
+                                        label += `${x.toFixed(2)} Ω`;
+                                    }
+                                    
+                                    label += ', ';
+                                    
+                                    if (currentYAxis === 'voltage') {
+                                        label += `${y.toFixed(3)} V`;
+                                    } else if (currentYAxis === 'current') {
+                                        if (y < 0.001) {
+                                            label += `${(y * 1e6).toFixed(2)} μA`;
+                                        } else if (y < 1) {
+                                            label += `${(y * 1000).toFixed(2)} mA`;
+                                        } else {
+                                            label += `${y.toFixed(3)} A`;
+                                        }
+                                    } else {
+                                        label += `${y.toFixed(2)} Ω`;
+                                    }
+                                    
+                                    return label;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'linear',
+                            position: 'bottom',
+                            title: {
+                                display: true,
+                                text: '電壓 (V)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            title: {
+                                display: true,
+                                text: '電流 (A)',
+                                font: {
+                                    size: 14,
+                                    weight: 'bold'
+                                }
+                            },
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.1)'
+                            }
+                        }
+                    }
+                },
+                plugins: [clickableScales]
+            });
+        }
+
+        // 初始化
+        document.addEventListener('DOMContentLoaded', function() {
+            createDatasetControls();
+            initChart();
+            updateChart();
+            
+            // 軸選擇器事件
+            document.getElementById('axisSelect').addEventListener('change', function(e) {
+                if (currentAxisType === 'x') {
+                    currentXAxis = e.target.value;
+                } else {
+                    currentYAxis = e.target.value;
+                }
+                updateChart();
+                document.getElementById('axisSelector').style.display = 'none';
+            });
+            
+            // 點擊其他地方關閉選擇器
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('#axisSelector') && !e.target.closest('canvas')) {
+                    document.getElementById('axisSelector').style.display = 'none';
+                }
+            });
+        });
+    </script>
+
+
+</body></html>
