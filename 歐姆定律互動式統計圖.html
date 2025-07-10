@@ -1,4 +1,6 @@
-<!DOCTYPE html><html lang="zh-TW"><head><meta http-equiv="Content-Security-Policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https://cdnjs.cloudflare.com https://cdn.jsdelivr.net https://code.jquery.com https://unpkg.com https://d3js.org https://threejs.org https://cdn.plot.ly https://stackpath.bootstrapcdn.com https://maps.googleapis.com https://cdn.tailwindcss.com https://ajax.googleapis.com https://kit.fontawesome.com https://cdn.datatables.net https://maxcdn.bootstrapcdn.com https://code.highcharts.com https://tako-static-assets-production.s3.amazonaws.com https://www.youtube.com https://fonts.googleapis.com https://fonts.gstatic.com https://pfst.cf2.poecdn.net https://puc.poecdn.net https://i.imgur.com https://wikimedia.org https://*.icons8.com https://*.giphy.com https://picsum.photos https://images.unsplash.com; frame-src 'self' https://www.youtube.com https://trytako.com; child-src 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests; block-all-mixed-content;">
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>歐姆定律互動式統計圖</title>
@@ -66,6 +68,12 @@
             height: 20px;
             border-radius: 3px;
             margin-right: 10px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: border-color 0.2s;
+        }
+        .color-indicator:hover {
+            border-color: #333;
         }
         .material-select {
             margin-bottom: 10px;
@@ -125,6 +133,53 @@
             border-radius: 4px;
             font-size: 14px;
         }
+        .resistance-input {
+            margin-bottom: 10px;
+        }
+        input[type="number"] {
+            width: 100%;
+            padding: 5px;
+            margin-bottom: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        .y-axis-label {
+            position: absolute;
+            left: -45px;
+            top: 50%;
+            transform: rotate(-90deg);
+            transform-origin: center;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .color-picker {
+            position: absolute;
+            background: white;
+            border: 2px solid #333;
+            border-radius: 6px;
+            padding: 10px;
+            display: none;
+            z-index: 1001;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+        }
+        .color-picker-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 30px);
+            gap: 5px;
+        }
+        .color-option {
+            width: 30px;
+            height: 30px;
+            border-radius: 3px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .color-option:hover {
+            transform: scale(1.1);
+            border-color: #333;
+        }
     </style>
 </head>
 <body>
@@ -139,6 +194,9 @@
                 <div class="axis-selector" id="axisSelector">
                     <select id="axisSelect"></select>
                 </div>
+                <div class="color-picker" id="colorPicker">
+                    <div class="color-picker-grid" id="colorPickerGrid"></div>
+                </div>
             </div>
             
             <div class="controls-panel" id="controlsPanel">
@@ -148,39 +206,54 @@
     </div>
 
     <script>
-        // 材料資料 - 使用更鮮明的顏色
+        // 可用顏色列表（使用現有的顏色）
+        const availableColors = [
+            '#FF6B35', // 橘紅色
+            '#4ECDC4', // 青綠色
+            '#9B59B6', // 紫色
+            '#E74C3C', // 紅色
+            '#2ECC71', // 綠色
+            '#3498DB', // 藍色
+            '#F39C12', // 橙色
+            '#8B4513'  // 棕色
+        ];
+
+        // 材料資料
         const materials = {
-            '銅': { resistivity: 1.68e-8, color: '#FF6B35' }, // 橘紅色
-            '鐵': { resistivity: 9.71e-8, color: '#4ECDC4' }, // 青綠色
-            '鎳鉻絲': { resistivity: 1.10e-6, color: '#9B59B6' }, // 紫色
-            '康銅絲': { resistivity: 4.9e-7, color: '#E74C3C' }, // 紅色
-            '石墨': { resistivity: 1.0e-5, color: '#2ECC71' }, // 綠色
-            '矽': { resistivity: null, color: '#3498DB' }, // 藍色 - 使用特殊數據
-            '玻璃': { resistivity: 1.0e12, color: '#F39C12' } // 橙色
+            '銅': { resistivity: 1.68e-8, defaultColor: '#FF6B35' },
+            '鐵': { resistivity: 9.71e-8, defaultColor: '#4ECDC4' },
+            '鎳鉻絲': { resistivity: 1.10e-6, defaultColor: '#9B59B6' },
+            '康銅絲': { resistivity: 4.9e-7, defaultColor: '#E74C3C' },
+            '石墨': { resistivity: 1.0e-5, defaultColor: '#2ECC71' },
+            '矽': { resistivity: null, defaultColor: '#3498DB' },
+            '玻璃': { resistivity: 1.0e12, defaultColor: '#F39C12' },
+            '電阻': { resistivity: null, defaultColor: '#8B4513' },
+            '鎢絲燈泡': { resistivity: null, defaultColor: '#FFD700' } // 金黃色
         };
 
         // 數據組
         let datasets = [
-            { id: 1, material: '銅', length: 5, diameter: 5, enabled: true },
-            { id: 2, material: '鎳鉻絲', length: 5, diameter: 5, enabled: false },
-            { id: 3, material: '矽', length: 5, diameter: 5, enabled: false }
+            { id: 1, material: '銅', length: 5, diameter: 5, enabled: true, resistance: 100, color: '#FF6B35' },
+            { id: 2, material: '鎳鉻絲', length: 5, diameter: 5, enabled: false, resistance: 100, color: '#9B59B6' },
+            { id: 3, material: '矽', length: 5, diameter: 5, enabled: false, resistance: 100, color: '#3498DB' }
         ];
 
         let chart;
         let currentXAxis = 'voltage';
         let currentYAxis = 'current';
         let currentAxisType = null;
+        let currentColorPickerDatasetId = null;
 
-        // 檢查是否有矽在顯示中
-        function hasSiliconEnabled() {
+        // 檢查是否有非線性元件在顯示中
+        function hasNonLinearEnabled() {
             return datasets.some(dataset => 
-                dataset.enabled && dataset.material === '矽'
+                dataset.enabled && (dataset.material === '矽' || dataset.material === '鎢絲燈泡')
             );
         }
 
         // 計算電阻
         function calculateResistance(material, length, diameter) {
-            if (material === '矽') {
+            if (material === '矽' || material === '電阻' || material === '鎢絲燈泡') {
                 return 'N/A';
             }
             const resistivity = materials[material].resistivity;
@@ -245,24 +318,126 @@
             return points;
         }
 
+        // 生成鎢絲燈泡的數據點（考慮溫度效應）
+        function generateTungstenBulbData(dataset) {
+            const points = [];
+            
+            // 鎢絲參數
+            const R0 = 10; // 室溫(20°C)時的電阻 (Ω)
+            const alpha = 0.0045; // 鎢的電阻溫度係數 (1/°C)
+            const T0 = 20; // 室溫 (°C)
+            
+            // 根據尺寸調整基礎電阻
+            const lengthFactor = dataset.length / 5;
+            const areaFactor = (dataset.diameter / 5) ** 2;
+            const adjustedR0 = R0 * lengthFactor / areaFactor;
+            
+            // 生成數據點
+            const maxVoltage = hasNonLinearEnabled() ? 12 : 100;
+            const numPoints = 60;
+            
+            for (let i = 0; i <= numPoints; i++) {
+                const voltage = (maxVoltage * i) / numPoints;
+                
+                if (voltage === 0) {
+                    points.push({
+                        voltage: 0,
+                        current: 0,
+                        resistance: adjustedR0
+                    });
+                    continue;
+                }
+                
+                // 使用迭代方法求解（因為溫度依賴於功率，而功率又依賴於電流）
+                let current = voltage / adjustedR0; // 初始猜測
+                let resistance = adjustedR0;
+                
+                for (let j = 0; j < 10; j++) {
+                    // 計算功率
+                    const power = voltage * current;
+                    
+                    // 簡化的溫度模型：溫度上升與功率成正比
+                    // 假設每瓦特功率使溫度上升200°C（這是簡化的模型）
+                    const tempRise = power * 200;
+                    const temperature = T0 + tempRise;
+                    
+                    // 限制最高溫度（鎢絲熔點約3400°C，實際使用約2500°C）
+                    const limitedTemp = Math.min(temperature, 2500);
+                    
+                    // 計算新的電阻
+                    resistance = adjustedR0 * (1 + alpha * (limitedTemp - T0));
+                    
+                    // 計算新的電流
+                    const newCurrent = voltage / resistance;
+                    
+                    // 收斂檢查
+                    if (Math.abs(newCurrent - current) < 0.0001) {
+                        break;
+                    }
+                    
+                    current = newCurrent;
+                }
+                
+                points.push({
+                    voltage: voltage,
+                    current: current,
+                    resistance: resistance
+                });
+            }
+            
+            return points;
+        }
+
+        // 生成電阻的數據點
+        function generateResistorData(dataset) {
+            const points = [];
+            const resistance = dataset.resistance;
+            
+            const hasNonLinear = hasNonLinearEnabled();
+            let maxVoltage = hasNonLinear ? 12 : 10;
+            
+            // 根據電阻大小調整電壓範圍
+            if (!hasNonLinear) {
+                if (resistance > 1e3) maxVoltage = 100;
+                if (resistance > 1e6) maxVoltage = 1000;
+            }
+            
+            // 生成數據點
+            const numPoints = 40;
+            for (let i = 0; i <= numPoints; i++) {
+                const voltage = (maxVoltage * i) / numPoints;
+                const current = voltage / resistance;
+                
+                points.push({
+                    voltage: voltage,
+                    current: current,
+                    resistance: resistance
+                });
+            }
+            
+            return points;
+        }
+
         // 生成數據點
         function generateDataPoints(dataset) {
-            const hasSilicon = hasSiliconEnabled();
-            
-            // 對於矽，使用特殊的非線性模型
+            // 對於特殊材料，使用特殊的模型
             if (dataset.material === '矽') {
                 return generateSiliconData(dataset);
+            } else if (dataset.material === '鎢絲燈泡') {
+                return generateTungstenBulbData(dataset);
+            } else if (dataset.material === '電阻') {
+                return generateResistorData(dataset);
             }
             
             // 其他材料使用線性計算
             const resistance = calculateResistance(dataset.material, dataset.length, dataset.diameter);
             const points = [];
             
-            // 如果有矽顯示，限制電壓範圍在1.2V
-            let maxVoltage = hasSilicon ? 1.2 : 10;
+            const hasNonLinear = hasNonLinearEnabled();
+            let maxVoltage = hasNonLinear ? 12 : 10;
             
-            // 如果沒有矽，根據電阻大小調整電壓範圍
-            if (!hasSilicon) {
+            // 如果沒有非線性元件，根據電阻大小調整電壓範圍
+            if (!hasNonLinear) {
                 if (resistance > 1e3) maxVoltage = 100;
                 if (resistance > 1e6) maxVoltage = 1000;
                 if (resistance > 1e9) maxVoltage = 10000;
@@ -284,6 +459,41 @@
             return points;
         }
 
+        // 創建顏色選擇器
+        function createColorPicker() {
+            const grid = document.getElementById('colorPickerGrid');
+            grid.innerHTML = '';
+            
+            availableColors.forEach(color => {
+                const colorOption = document.createElement('div');
+                colorOption.className = 'color-option';
+                colorOption.style.backgroundColor = color;
+                colorOption.addEventListener('click', () => {
+                    if (currentColorPickerDatasetId !== null) {
+                        const dataset = datasets.find(d => d.id === currentColorPickerDatasetId);
+                        if (dataset) {
+                            dataset.color = color;
+                            updateColorIndicator(currentColorPickerDatasetId);
+                            updateChart();
+                        }
+                    }
+                    document.getElementById('colorPicker').style.display = 'none';
+                });
+                grid.appendChild(colorOption);
+            });
+        }
+
+        // 顯示顏色選擇器
+        function showColorPicker(e, datasetId) {
+            const picker = document.getElementById('colorPicker');
+            currentColorPickerDatasetId = datasetId;
+            
+            const rect = e.target.getBoundingClientRect();
+            picker.style.display = 'block';
+            picker.style.left = (rect.right + 10) + 'px';
+            picker.style.top = rect.top + 'px';
+        }
+
         // 創建數據組控制界面
         function createDatasetControls() {
             const container = document.getElementById('controlsPanel');
@@ -293,9 +503,23 @@
                 const div = document.createElement('div');
                 div.className = `dataset-control ${!dataset.enabled ? 'disabled' : ''}`;
                 
+                let extraControls = '';
+                
+                // 電阻值輸入
+                if (dataset.material === '電阻') {
+                    extraControls = `
+                        <div class="resistance-input" id="resistanceInput${dataset.id}">
+                            <label>電阻值 (Ω):</label>
+                            <input type="number" id="resistance${dataset.id}" value="${dataset.resistance}" min="0.1" step="0.1">
+                        </div>
+                    `;
+                }
+                
+                const showSizeControls = dataset.material !== '電阻';
+                
                 div.innerHTML = `
                     <div class="dataset-header">
-                        <span class="color-indicator" style="background-color: ${materials[dataset.material].color}"></span>
+                        <span class="color-indicator" id="colorIndicator${dataset.id}" style="background-color: ${dataset.color}"></span>
                         <label>
                             <input type="checkbox" id="enable${dataset.id}" ${dataset.enabled ? 'checked' : ''}>
                             數據組 ${dataset.id}
@@ -311,6 +535,9 @@
                         </select>
                     </div>
                     
+                    ${extraControls}
+                    
+                    ${showSizeControls ? `
                     <div class="sliders-container">
                         <div class="slider-group">
                             <label>長度:</label>
@@ -324,35 +551,62 @@
                             <span class="range-value" id="diameterValue${dataset.id}">${dataset.diameter} mm</span>
                         </div>
                     </div>
+                    ` : '<div style="flex: 1;"></div>'}
                 `;
                 
                 container.appendChild(div);
                 
-                // 綁定事件
+                // 綁定顏色選擇器事件
+                document.getElementById(`colorIndicator${dataset.id}`).addEventListener('click', function(e) {
+                    if (!div.classList.contains('disabled')) {
+                        showColorPicker(e, dataset.id);
+                    }
+                });
+                
+                // 綁定其他事件
                 document.getElementById(`enable${dataset.id}`).addEventListener('change', function(e) {
                     div.classList.toggle('disabled', !e.target.checked);
                     updateChart();
                 });
+                
                 document.getElementById(`material${dataset.id}`).addEventListener('change', function() {
+                    dataset.material = this.value;
+                    // 材料改變時重置為預設顏色
+                    dataset.color = materials[dataset.material].defaultColor;
                     updateColorIndicator(dataset.id);
+                    createDatasetControls(); // 重新創建控制項以顯示/隱藏相關選項
                     updateChart();
                 });
-                document.getElementById(`length${dataset.id}`).addEventListener('input', function(e) {
-                    document.getElementById(`lengthValue${dataset.id}`).textContent = e.target.value + ' m';
-                    updateChart();
-                });
-                document.getElementById(`diameter${dataset.id}`).addEventListener('input', function(e) {
-                    document.getElementById(`diameterValue${dataset.id}`).textContent = e.target.value + ' mm';
-                    updateChart();
-                });
+                
+                if (dataset.material === '電阻') {
+                    document.getElementById(`resistance${dataset.id}`).addEventListener('input', function() {
+                        dataset.resistance = parseFloat(this.value) || 100;
+                        updateChart();
+                    });
+                }
+                
+                if (showSizeControls) {
+                    document.getElementById(`length${dataset.id}`).addEventListener('input', function(e) {
+                        dataset.length = parseFloat(e.target.value);
+                        document.getElementById(`lengthValue${dataset.id}`).textContent = e.target.value + ' m';
+                        updateChart();
+                    });
+                    document.getElementById(`diameter${dataset.id}`).addEventListener('input', function(e) {
+                        dataset.diameter = parseFloat(e.target.value);
+                        document.getElementById(`diameterValue${dataset.id}`).textContent = e.target.value + ' mm';
+                        updateChart();
+                    });
+                }
             });
         }
 
         // 更新顏色指示器
         function updateColorIndicator(id) {
-            const material = document.getElementById(`material${id}`).value;
-            const colorIndicator = document.querySelector(`#controlsPanel .dataset-control:nth-child(${id}) .color-indicator`);
-            colorIndicator.style.backgroundColor = materials[material].color;
+            const dataset = datasets.find(d => d.id === id);
+            const colorIndicator = document.getElementById(`colorIndicator${id}`);
+            if (colorIndicator) {
+                colorIndicator.style.backgroundColor = dataset.color;
+            }
         }
 
         // 顯示軸選擇器
@@ -380,9 +634,6 @@
             // 更新數據組資料
             datasets.forEach(dataset => {
                 dataset.enabled = document.getElementById(`enable${dataset.id}`).checked;
-                dataset.material = document.getElementById(`material${dataset.id}`).value;
-                dataset.length = parseFloat(document.getElementById(`length${dataset.id}`).value);
-                dataset.diameter = parseFloat(document.getElementById(`diameter${dataset.id}`).value);
             });
             
             // 準備圖表數據
@@ -401,19 +652,24 @@
                         y: p[currentYAxis]
                     }));
                     
-                    const label = `${dataset.material} (L=${dataset.length}m, D=${dataset.diameter}mm)`;
+                    let label = '';
+                    if (dataset.material === '電阻') {
+                        label = `電阻 ${dataset.resistance}Ω`;
+                    } else {
+                        label = `${dataset.material} (L=${dataset.length}m, D=${dataset.diameter}mm)`;
+                    }
                     
                     chartDatasets.push({
                         label: label,
                         data: data,
-                        borderColor: materials[dataset.material].color,
-                        backgroundColor: materials[dataset.material].color + '40',
-                        pointBackgroundColor: materials[dataset.material].color,
-                        pointBorderColor: materials[dataset.material].color,
+                        borderColor: dataset.color,
+                        backgroundColor: dataset.color + '40',
+                        pointBackgroundColor: dataset.color,
+                        pointBorderColor: dataset.color,
                         pointRadius: 2,
                         pointHoverRadius: 4,
                         borderWidth: 3,
-                        tension: dataset.material === '矽' ? 0.4 : 0,
+                        tension: (dataset.material === '矽' || dataset.material === '鎢絲燈泡') ? 0.4 : 0,
                         fill: false
                     });
                 }
@@ -422,16 +678,21 @@
             // 更新圖表
             chart.data.datasets = chartDatasets;
             chart.options.scales.x.title.text = getAxisLabel(currentXAxis);
-            chart.options.scales.y.title.text = getAxisLabel(currentYAxis);
+            
+            // Y軸標題設為空（使用自定義的直書標籤）
+            chart.options.scales.y.title.text = '';
             
             // 始終使用線性刻度
             chart.options.scales.x.type = 'linear';
             chart.options.scales.y.type = 'linear';
             
-            // 如果有矽顯示且X軸是電壓，設定最大值為1.2V
-            if (hasSiliconEnabled() && currentXAxis === 'voltage') {
-                chart.options.scales.x.max = 1.2;
-                chart.options.scales.x.min = 0;
+            // 根據顯示的元件調整電壓範圍
+            if (hasNonLinearEnabled()) {
+                if (currentXAxis === 'voltage') {
+                    const hasTungsten = datasets.some(d => d.enabled && d.material === '鎢絲燈泡');
+                    chart.options.scales.x.max = hasTungsten ? 12 : 1.2;
+                    chart.options.scales.x.min = 0;
+                }
             } else {
                 delete chart.options.scales.x.max;
                 chart.options.scales.x.min = 0;
@@ -501,7 +762,8 @@
                             }
                         },
                         legend: {
-                            position: 'bottom',
+                            position: 'right',
+                            align: 'start',
                             labels: {
                                 boxWidth: 20,
                                 padding: 10,
@@ -580,25 +842,45 @@
                         y: {
                             type: 'linear',
                             title: {
-                                display: true,
-                                text: '電流 (A)',
-                                font: {
-                                    size: 14,
-                                    weight: 'bold'
-                                }
+                                display: false // 使用自定義標籤
                             },
                             grid: {
                                 color: 'rgba(0, 0, 0, 0.1)'
                             }
                         }
+                    },
+                    layout: {
+                        padding: {
+                            left: 50 // 為直書標籤留空間
+                        }
                     }
                 },
-                plugins: [clickableScales]
+                plugins: [clickableScales, {
+                    id: 'customYAxisLabel',
+                    afterDraw: (chart) => {
+                        const ctx = chart.ctx;
+                        const chartArea = chart.chartArea;
+                        
+                        ctx.save();
+                        ctx.translate(15, chartArea.top + (chartArea.bottom - chartArea.top) / 2);
+                        ctx.rotate(-Math.PI / 2);
+                        ctx.font = 'bold 14px Arial';
+                        ctx.fillStyle = '#666';
+                        ctx.textAlign = 'center';
+                        ctx.textBaseline = 'middle';
+                        
+                        const labelText = getAxisLabel(currentYAxis);
+                        ctx.fillText(labelText, 0, 0);
+                        
+                        ctx.restore();
+                    }
+                }]
             });
         }
 
         // 初始化
         document.addEventListener('DOMContentLoaded', function() {
+            createColorPicker();
             createDatasetControls();
             initChart();
             updateChart();
@@ -619,9 +901,11 @@
                 if (!e.target.closest('#axisSelector') && !e.target.closest('canvas')) {
                     document.getElementById('axisSelector').style.display = 'none';
                 }
+                if (!e.target.closest('#colorPicker') && !e.target.closest('.color-indicator')) {
+                    document.getElementById('colorPicker').style.display = 'none';
+                }
             });
         });
     </script>
-
-
-</body></html>
+</body>
+</html>
