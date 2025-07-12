@@ -40,19 +40,23 @@
         }
         .controls-panel {
             width: 320px;
-            height: 500px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .dataset-controls-wrapper {
             display: flex;
             flex-direction: column;
             gap: 10px;
         }
         .dataset-control {
-            flex: 1;
             background-color: #f9f9f9;
             padding: 12px;
             border-radius: 8px;
             border: 1px solid #e0e0e0;
             display: flex;
             flex-direction: column;
+            min-height: 150px;
         }
         .dataset-control.disabled {
             opacity: 0.5;
@@ -180,6 +184,20 @@
             transform: scale(1.1);
             border-color: #333;
         }
+        .export-button {
+            width: 100%;
+            padding: 10px 16px;
+            background-color: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .export-button:hover {
+            background-color: #1976D2;
+        }
     </style>
 </head>
 <body>
@@ -199,8 +217,11 @@
                 </div>
             </div>
             
-            <div class="controls-panel" id="controlsPanel">
-                <!-- 數據組控制會動態插入這裡 -->
+            <div class="controls-panel">
+                <div class="dataset-controls-wrapper" id="controlsPanel">
+                    <!-- 數據組控制會動態插入這裡 -->
+                </div>
+                <button class="export-button" id="exportButton">下載圖表</button>
             </div>
         </div>
     </div>
@@ -542,13 +563,13 @@
                         <div class="slider-group">
                             <label>長度:</label>
                             <input type="range" id="length${dataset.id}" min="1" max="10" step="0.5" value="${dataset.length}">
-                            <span class="range-value" id="lengthValue${dataset.id}">${dataset.length} m</span>
+                            <span class="range-value" id="lengthValue${dataset.id}">${dataset.length} 公尺</span>
                         </div>
                         
                         <div class="slider-group">
                             <label>直徑:</label>
                             <input type="range" id="diameter${dataset.id}" min="1" max="10" step="0.5" value="${dataset.diameter}">
-                            <span class="range-value" id="diameterValue${dataset.id}">${dataset.diameter} mm</span>
+                            <span class="range-value" id="diameterValue${dataset.id}">${dataset.diameter} 毫米</span>
                         </div>
                     </div>
                     ` : '<div style="flex: 1;"></div>'}
@@ -588,12 +609,12 @@
                 if (showSizeControls) {
                     document.getElementById(`length${dataset.id}`).addEventListener('input', function(e) {
                         dataset.length = parseFloat(e.target.value);
-                        document.getElementById(`lengthValue${dataset.id}`).textContent = e.target.value + ' m';
+                        document.getElementById(`lengthValue${dataset.id}`).textContent = e.target.value + ' 公尺';
                         updateChart();
                     });
                     document.getElementById(`diameter${dataset.id}`).addEventListener('input', function(e) {
                         dataset.diameter = parseFloat(e.target.value);
-                        document.getElementById(`diameterValue${dataset.id}`).textContent = e.target.value + ' mm';
+                        document.getElementById(`diameterValue${dataset.id}`).textContent = e.target.value + ' 毫米';
                         updateChart();
                     });
                 }
@@ -656,7 +677,7 @@
                     if (dataset.material === '電阻') {
                         label = `電阻 ${dataset.resistance}Ω`;
                     } else {
-                        label = `${dataset.material} (L=${dataset.length}m, D=${dataset.diameter}mm)`;
+                        label = `${dataset.material} (長度${dataset.length}公尺, 直徑${dataset.diameter}毫米)`;
                     }
                     
                     chartDatasets.push({
@@ -708,6 +729,84 @@
                 case 'current': return '電流 (A)';
                 case 'resistance': return '電阻 (Ω)';
             }
+        }
+
+        // 獲取軸名稱（用於檔名）
+        function getAxisName(axis) {
+            switch(axis) {
+                case 'voltage': return '電壓';
+                case 'current': return '電流';
+                case 'resistance': return '電阻';
+            }
+        }
+
+        // 導出圖表
+        function exportChart() {
+            // 獲取啟用的材料名稱
+            const enabledMaterials = datasets
+                .filter(d => d.enabled)
+                .map(d => d.material);
+            
+            if (enabledMaterials.length === 0) return;
+            
+            // 建立檔名和標題
+            const materialsStr = enabledMaterials.join('與');
+            const xAxisName = getAxisName(currentXAxis);
+            const yAxisName = getAxisName(currentYAxis);
+            const titleText = `${materialsStr}的${xAxisName}與${yAxisName}關係圖`;
+            const filename = `${titleText}.jpg`;
+            
+            // 創建臨時canvas
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            
+            // 設定canvas大小（與原圖表相同）
+            tempCanvas.width = chart.canvas.width;
+            tempCanvas.height = chart.canvas.height;
+            
+            // 填充白色背景
+            tempCtx.fillStyle = 'white';
+            tempCtx.fillRect(0, 0, tempCanvas.width, tempCanvas.height);
+            
+            // 儲存當前圖表設定
+            const originalTitleDisplay = chart.options.plugins.title.display;
+            const originalTitleText = chart.options.plugins.title.text;
+            const originalGridDisplay = {
+                x: chart.options.scales.x.grid.display,
+                y: chart.options.scales.y.grid.display
+            };
+            
+            // 暫時修改設定：顯示自訂標題和格線
+            chart.options.plugins.title.display = true;
+            chart.options.plugins.title.text = titleText;
+            chart.options.scales.x.grid.display = true;
+            chart.options.scales.y.grid.display = true;
+            chart.update();
+            
+            // 等待圖表更新完成
+            setTimeout(() => {
+                // 將圖表繪製到臨時canvas上（已有白色背景）
+                tempCtx.drawImage(chart.canvas, 0, 0);
+                
+                // 轉換為blob並下載
+                tempCanvas.toBlob((blob) => {
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    URL.revokeObjectURL(url);
+                    
+                    // 恢復原始設定
+                    chart.options.plugins.title.display = originalTitleDisplay;
+                    chart.options.plugins.title.text = originalTitleText;
+                    chart.options.scales.x.grid.display = originalGridDisplay.x;
+                    chart.options.scales.y.grid.display = originalGridDisplay.y;
+                    chart.update();
+                }, 'image/jpeg', 0.95);
+            }, 100);
         }
 
         // 初始化圖表
@@ -763,7 +862,7 @@
                         },
                         legend: {
                             position: 'right',
-                            align: 'start',
+                            align: 'center',
                             labels: {
                                 boxWidth: 20,
                                 padding: 10,
@@ -836,7 +935,8 @@
                                 }
                             },
                             grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                display: true
                             }
                         },
                         y: {
@@ -845,7 +945,8 @@
                                 display: false // 使用自定義標籤
                             },
                             grid: {
-                                color: 'rgba(0, 0, 0, 0.1)'
+                                color: 'rgba(0, 0, 0, 0.1)',
+                                display: true
                             }
                         }
                     },
@@ -884,6 +985,9 @@
             createDatasetControls();
             initChart();
             updateChart();
+            
+            // 綁定導出按鈕
+            document.getElementById('exportButton').addEventListener('click', exportChart);
             
             // 軸選擇器事件
             document.getElementById('axisSelect').addEventListener('change', function(e) {
