@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Graph 專案程式列表</title>
+<style>
+  body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    margin: 40px;
+    background-color: #f4f7f6;
+    color: #333;
+    line-height: 1.6;
+  }
+  .container {
+    max-width: 800px;
+    margin: 0 auto;
+    background-color: #ffffff;
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+  }
+  h1 {
+    color: #0056b3;
+    text-align: center;
+    margin-bottom: 30px;
+    font-size: 2.2em;
+  }
+  ul {
+    list-style-type: none;
+    padding: 0;
+  }
+  li {
+    background-color: #e9f0f6;
+    margin-bottom: 12px;
+    padding: 15px 20px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    transition: background-color 0.3s ease;
+  }
+  li:hover {
+    background-color: #dbe4ee;
+  }
+  a {
+    text-decoration: none;
+    color: #007bff;
+    font-weight: bold;
+    font-size: 1.1em;
+    flex-grow: 1;
+  }
+  a:hover {
+    text-decoration: underline;
+    color: #0056b3;
+  }
+  .no-files-message {
+    text-align: center;
+    color: #666;
+    font-style: italic;
+    padding: 20px;
+    border: 1px dashed #ccc;
+    border-radius: 5px;
+    margin-top: 30px;
+  }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <h1>Graph 專案程式列表</h1>
+
+  <ul id="file-list">
+    </ul>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  const fileList = document.getElementById('file-list');
+
+  // **請在這裡手動列出所有你要顯示的 HTML 檔案名稱**
+  // 這些名稱必須與您的 GitHub 倉庫中的實際檔案名稱完全一致（包括大小寫和副檔名）。
+  const htmlFiles = [
+    "1mass_volume.html",
+    "1mass_volume1.html",
+    "2mass_volume.html",
+    "2mass_volume1.html",
+    "2mass_volume2.html",
+    "3mass_volume.html",
+    "4mass_volume.html",
+    "maps.html",
+    "solubility.html",
+    "waterMass_volume_GC.html",
+    "二物體絕熱交換.html",
+    "冰塊升溫.html",
+    "加熱水到沸點.html",
+    "升溫曲線.html",
+    "圓周律律動式統計圖.html",
+    "酸鹼中和pH數據產生器.html",
+    "降溫曲線.html"
+  ];
+
+  if (htmlFiles.length === 0) {
+    fileList.innerHTML = '<li class="no-files-message">目前沒有其他 HTML 檔案被列出。請在 `index.html` 的 JavaScript 代碼中添加檔案名稱。</li>';
+    return;
+  }
+
+  // 排序檔案列表，讓它看起來更整齊 (可選，中文會依拼音或部首筆劃排序)
+  htmlFiles.sort((a, b) => a.localeCompare(b, 'zh-Hant', { sensitivity: 'base' }));
+
+
+  htmlFiles.forEach(fileName => {
+    const listItem = document.createElement('li');
+    const anchor = document.createElement('a');
+    
+    anchor.href = fileName; // 連結到檔案本身
+    anchor.textContent = fileName; // 顯示檔案名稱
+    listItem.appendChild(anchor);
+    fileList.appendChild(listItem);
+  });
+});
+</script>
+
+</body>
+</html>
